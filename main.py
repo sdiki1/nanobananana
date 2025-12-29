@@ -8,6 +8,7 @@ from config import settings
 from db.session import create_engine, create_session_factory
 from handlers import register_all
 from middlewares.db import DBSessionMiddleware
+from middlewares.action_logger import ActionLoggingMiddleware
 
 
 logging.basicConfig(level=logging.INFO)
@@ -32,6 +33,7 @@ def main() -> None:
     engine = create_engine()
     session_factory = create_session_factory(engine)
     dp.middleware.setup(DBSessionMiddleware(session_factory))
+    dp.middleware.setup(ActionLoggingMiddleware(session_factory))
 
     register_all(dp)
 

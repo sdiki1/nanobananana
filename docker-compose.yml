@@ -10,6 +10,7 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./db/migrations/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+      - ./db/migrations/002_action_logs.sql:/docker-entrypoint-initdb.d/002_action_logs.sql:ro
     ports:
       - "5432:5432"
 

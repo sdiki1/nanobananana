@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from db.models import Generation, Referral, Transaction, User
+from db.models import ActionLog, Generation, Referral, Transaction, User
 from utils.helpers import generate_referral_code
 
 
@@ -215,3 +215,21 @@ async def find_user(session: AsyncSession, query: str) -> Optional[User]:
         return result.scalar_one_or_none()
     result = await session.execute(select(User).where(User.username == query))
     return result.scalar_one_or_none()
+
+
+async def log_action(
+    session: AsyncSession,
+    tg_id: int,
+    username: Optional[str],
+    action: str,
+    payload: Optional[dict] = None,
+) -> ActionLog:
+    entry = ActionLog(tg_id=tg_id, username=username, action=action, payload=payload)
+    session.add(entry)
+    await session.commit()
+    return entry
+
+
+async def get_action_logs(session: AsyncSession, limit: int = 1000) -> list[ActionLog]:
+    result = await session.execute(select(ActionLog).order_by(ActionLog.created_at.desc()).limit(limit))
+    return list(result.scalars().all())

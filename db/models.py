@@ -73,3 +73,14 @@ class Referral(Base):
 
     referrer = relationship("User", foreign_keys=[referrer_id])
     referred_user = relationship("User", foreign_keys=[referred_user_id])
+
+
+class ActionLog(Base):
+    __tablename__ = "action_logs"
+
+    id = Column(Integer, primary_key=True)
+    tg_id = Column(BigInteger, nullable=False)
+    username = Column(String(255))
+    action = Column(String(64), nullable=False)
+    payload = Column(JSONB)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
