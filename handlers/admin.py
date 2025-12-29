@@ -191,7 +191,7 @@ async def admin_user_action(query: types.CallbackQuery, state: FSMContext, sessi
     await state.finish()
     await state.update_data(operation=op, target_tg_id=tg_id)
     await state.set_state(AdminStates.waiting_amounts.state)
-    await query.message.edit_text("Введите через пробел: <diamonds> <bananas>")
+    await query.message.edit_text("Введите через пробел: diamonds bananas", parse_mode=None)
     await query.answer()
 
 
@@ -220,7 +220,8 @@ async def admin_user_query_input(message: types.Message, state: FSMContext, sess
     await message.answer(
         f"Пользователь найден: tg_id={user.tg_id}, username={user.username}\n"
         f"Текущий баланс: 💎 {user.diamonds}, 🍌 {user.bananas}\n"
-        f"Введите сколько {action_word}: <diamonds> <bananas>"
+        f"Введите сколько {action_word}: diamonds bananas",
+        parse_mode=None,
     )
 
 
