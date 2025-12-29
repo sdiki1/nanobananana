@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from db.repositories import confirm_topup, create_transaction, get_user_by_tg_id
+from handlers.common import send_main_menu
 from keyboards.main import card_packages_kb, stars_packages_kb, topup_method_kb
 from services.payments.card import CardPaymentService
 from services.payments.stars import StarsPaymentService
@@ -17,7 +18,7 @@ card_service = CardPaymentService()
 stars_service = StarsPaymentService()
 
 
-async def topup_callback(query: types.CallbackQuery) -> None:
+async def topup_callback(query: types.CallbackQuery, session: AsyncSession) -> None:
     action = query.data.split(":", 1)[1]
     if action == "card":
         await query.message.edit_text("Выберите пакет Card RUB:")
@@ -30,7 +31,11 @@ async def topup_callback(query: types.CallbackQuery) -> None:
         await query.answer()
         return
     if action == "back":
-        await query.message.delete()
+        user = await get_user_by_tg_id(session, query.from_user.id)
+        if user:
+            await send_main_menu(query.message, user, edit=True)
+        else:
+            await query.message.edit_text("Сначала отправьте /start")
         await query.answer()
 
 
@@ -63,11 +68,13 @@ async def card_callback(query: types.CallbackQuery, session: AsyncSession) -> No
         payload={"package": pkg.code, "price_rub": pkg.price_rub},
     )
 
-    await query.message.answer(
+    await query.message.edit_text(
         "Оплатите заказ по ссылке:\n"
         f"{link.payment_url}\n\n"
-        f"Номер заказа: {link.order_id}"
+        f"Номер заказа: {link.order_id}",
+        disable_web_page_preview=True,
     )
+    await query.message.edit_reply_markup(reply_markup=None)
     await query.answer("Ссылка отправлена")
 
 
@@ -107,6 +114,8 @@ async def stars_callback(query: types.CallbackQuery, session: AsyncSession) -> N
         payload=order_id,
         provider_token=settings.stars_provider_token,
     )
+    await query.message.edit_text("Счёт в Telegram Stars отправлен. Оплатите его в чате.")
+    await query.message.edit_reply_markup(reply_markup=None)
     await query.answer()
 
 

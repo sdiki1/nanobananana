@@ -2,8 +2,9 @@ from aiogram import types
 from aiogram.dispatcher.filters import Text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from handlers.common import send_main_menu
 from db.repositories import get_user_by_tg_id, set_user_model
-from keyboards.main import main_menu_kb, model_select_kb
+from keyboards.main import model_select_kb
 from utils.constants import MODEL_NAMES
 
 
@@ -15,7 +16,7 @@ async def model_callback(query: types.CallbackQuery, session: AsyncSession) -> N
         return
 
     if data == "back":
-        await query.message.delete()
+        await send_main_menu(query.message, user, edit=True)
         await query.answer()
         return
 
@@ -26,7 +27,7 @@ async def model_callback(query: types.CallbackQuery, session: AsyncSession) -> N
     await set_user_model(session, user.id, data)
     await query.message.edit_reply_markup(reply_markup=model_select_kb(data))
     await query.answer(f"Выбрана модель {MODEL_NAMES[data]}")
-    await query.message.answer("Модель обновлена ✅", reply_markup=main_menu_kb(data))
+    await send_main_menu(query.message, user, edit=True)
 
 
 def register(dp):

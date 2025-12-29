@@ -59,6 +59,9 @@ class Settings:
     fsm_storage: str
     redis_url: Optional[str]
     yoomoney_base_url: str
+    gemini_api_key: str
+    gemini_nano_model: str
+    gemini_pro_model: str
 
     @staticmethod
     def load() -> "Settings":
@@ -73,11 +76,14 @@ class Settings:
             chatgpt_url=_get_env("CHATGPT_URL", "https://t.me/"),
             veo_url=_get_env("VEO_URL", "https://t.me/"),
             referral_percent=_get_float_env("REFERRAL_PERCENT", 10.0),
-            animate_cost=_get_int_env("ANIMATE_COST", 5),
+            animate_cost=_get_int_env("ANIMATE_COST", 10),
             stars_provider_token=os.getenv("STARS_PROVIDER_TOKEN", ""),
             fsm_storage=os.getenv("FSM_STORAGE", "memory"),
             redis_url=os.getenv("REDIS_URL"),
             yoomoney_base_url=_get_env("YOOMONEY_BASE_URL", "https://pay.nanobanana.mock"),
+            gemini_api_key=_get_env("GEMINI_API_KEY"),
+            gemini_nano_model=_get_env("GEMINI_NANO_MODEL", "models/gemini-2.5-flash-image"),
+            gemini_pro_model=_get_env("GEMINI_PRO_MODEL", "models/gemini-2.5-flash-image"),
         )
 
 

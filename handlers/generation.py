@@ -1,3 +1,5 @@
+import asyncio
+from io import BytesIO
 from typing import Optional
 
 from aiogram import types
@@ -42,6 +44,60 @@ def _is_menu_text(text: str) -> bool:
     return False
 
 
+async def _start_progress_message(
+    message: types.Message,
+    prefix: str,
+    total_seconds: int = 40,
+    step_seconds: int = 5,
+):
+    try:
+        progress_message = await message.answer(f"{prefix}... ~{total_seconds} сек осталось")
+    except Exception:
+        return None, None, None
+
+    stop_event = asyncio.Event()
+
+    async def _updater():
+        remaining = total_seconds
+        while remaining > 0:
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=step_seconds)
+                break
+            except asyncio.TimeoutError:
+                remaining = max(0, remaining - step_seconds)
+                next_text = (
+                    f"{prefix}... ~{remaining} сек осталось" if remaining > 0 else f"{prefix} почти готово..."
+                )
+                try:
+                    await progress_message.edit_text(next_text)
+                except Exception:
+                    pass
+
+    task = asyncio.create_task(_updater())
+    return progress_message, stop_event, task
+
+
+async def _finish_progress_message(progress_message, stop_event, task, final_text: str) -> None:
+    if stop_event:
+        stop_event.set()
+    if task:
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+    if progress_message:
+        try:
+            await progress_message.edit_text(final_text)
+        except Exception:
+            pass
+
+
+def _estimate_processing_time(model: Optional[str]) -> int:
+    if model == "pro":
+        return 45
+    return 30
+
+
 async def handle_text_prompt(message: types.Message, session: AsyncSession) -> None:
     if not message.text or message.text.startswith("/") or _is_menu_text(message.text):
         return
@@ -83,26 +139,60 @@ async def handle_text_prompt(message: types.Message, session: AsyncSession) -> N
         cost_bananas=cost_bananas,
     )
 
+    progress_message = None
+    stop_event = None
+    progress_task = None
+
     try:
-        result_url = await nanobanana_client.generate_text2img(message.text, model)
-        await update_generation_status(session, generation.id, "completed", result_url=result_url)
-        await message.answer_photo(result_url, caption="Готово ✅")
+        progress_message, stop_event, progress_task = await _start_progress_message(
+            message,
+            prefix="Генерирую изображение",
+            total_seconds=_estimate_processing_time(model),
+        )
+        image_bytes = await nanobanana_client.generate_text2img(message.text, model)
+        input_file = types.InputFile(BytesIO(image_bytes), filename="nanobanana.png")
+        sent = await message.answer_photo(input_file, caption="Готово ✅")
+        result_file_id = sent.photo[-1].file_id if sent.photo else None
+        await update_generation_status(session, generation.id, "completed", result_url=result_file_id)
+        await _finish_progress_message(progress_message, stop_event, progress_task, "Изображение готово ✅")
     except Exception as exc:  # noqa: BLE001
+        await _finish_progress_message(
+            progress_message,
+            stop_event,
+            progress_task,
+            f"Не удалось создать изображение: {exc}",
+        )
         await update_generation_status(session, generation.id, "failed", error=str(exc))
         await adjust_balances(session, user.id, diamonds_delta=cost_diamonds, bananas_delta=cost_bananas)
         await message.answer(f"❌ Не удалось создать изображение. Причина: {exc}")
 
 
-async def _start_animate(user_id: int, reply_to: types.Message, state: FSMContext, session: AsyncSession) -> None:
+async def _start_animate(
+    user_id: int,
+    reply_to: types.Message,
+    state: FSMContext,
+    session: AsyncSession,
+    *,
+    edit_message: bool = False,
+) -> None:
     user = await get_user_by_tg_id(session, user_id)
     if not user:
-        await reply_to.answer("Сначала отправьте /start")
+        if edit_message:
+            await reply_to.edit_text("Сначала отправьте /start")
+        else:
+            await reply_to.answer("Сначала отправьте /start")
         return
     if user.diamonds < settings.animate_cost:
-        await reply_to.answer("Недостаточно кристаллов для оживления! Пополните баланс.")
+        if edit_message:
+            await reply_to.edit_text("Недостаточно кристаллов для оживления! Пополните баланс.")
+        else:
+            await reply_to.answer("Недостаточно кристаллов для оживления! Пополните баланс.")
         return
     await state.set_state(GenerationStates.waiting_photo_animate.state)
-    await reply_to.answer("Отправьте фото для оживления 📎")
+    if edit_message:
+        await reply_to.edit_text("Отправьте фото для оживления 📎")
+    else:
+        await reply_to.answer("Отправьте фото для оживления 📎")
 
 
 async def start_animate(message: types.Message, state: FSMContext, session: AsyncSession) -> None:
@@ -114,7 +204,7 @@ async def start_animate_callback(
     state: FSMContext,
     session: AsyncSession,
 ) -> None:
-    await _start_animate(query.from_user.id, query.message, state, session)
+    await _start_animate(query.from_user.id, query.message, state, session, edit_message=True)
 
 
 async def process_animate_photo(message: types.Message, state: FSMContext, session: AsyncSession) -> None:
@@ -155,11 +245,29 @@ async def process_animate_photo(message: types.Message, state: FSMContext, sessi
     warnings_text = "\n".join(ANIMATE_WARNINGS)
     await message.answer(f"Процесс обработки запущен ✅\n\n{warnings_text}")
 
+    progress_message = None
+    stop_event = None
+    progress_task = None
+    progress_message, stop_event, progress_task = await _start_progress_message(
+        message,
+        prefix="Оживляю фото",
+        total_seconds=_estimate_processing_time(None),
+    )
+
     try:
-        result_url = await nanobanana_client.animate_photo(message.photo[-1].file_id)
-        await update_generation_status(session, generation.id, "completed", result_url=result_url)
-        await message.answer_video(result_url, caption="Видео готово ✅")
+        video_bytes = await nanobanana_client.animate_photo(message.bot, message.photo[-1].file_id)
+        input_file = types.InputFile(BytesIO(video_bytes), filename="nanobanana.mp4")
+        sent = await message.answer_video(input_file, caption="Видео готово ✅")
+        result_file_id = sent.video.file_id if sent.video else None
+        await update_generation_status(session, generation.id, "completed", result_url=result_file_id)
+        await _finish_progress_message(progress_message, stop_event, progress_task, "Видео готово ✅")
     except Exception as exc:  # noqa: BLE001
+        await _finish_progress_message(
+            progress_message,
+            stop_event,
+            progress_task,
+            f"Не удалось создать видео: {exc}",
+        )
         await update_generation_status(session, generation.id, "failed", error=str(exc))
         await adjust_balances(session, user.id, diamonds_delta=settings.animate_cost)
         await message.answer(
@@ -216,11 +324,34 @@ async def process_preset_photo(
         cost_bananas=cost_bananas,
     )
 
+    progress_message = None
+    stop_event = None
+    progress_task = None
+
     try:
-        result_url = await nanobanana_client.generate_img2img(message.photo[-1].file_id, user.selected_preset)
-        await update_generation_status(session, generation.id, "completed", result_url=result_url)
-        await message.answer_photo(result_url, caption="Готово ✅")
+        progress_message, stop_event, progress_task = await _start_progress_message(
+            message,
+            prefix="Обрабатываю фото",
+            total_seconds=_estimate_processing_time(model),
+        )
+        image_bytes = await nanobanana_client.generate_img2img(
+            message.bot,
+            message.photo[-1].file_id,
+            user.selected_preset,
+            model,
+        )
+        input_file = types.InputFile(BytesIO(image_bytes), filename="nanobanana.png")
+        sent = await message.answer_photo(input_file, caption="Готово ✅")
+        result_file_id = sent.photo[-1].file_id if sent.photo else None
+        await update_generation_status(session, generation.id, "completed", result_url=result_file_id)
+        await _finish_progress_message(progress_message, stop_event, progress_task, "Фото готово ✅")
     except Exception as exc:  # noqa: BLE001
+        await _finish_progress_message(
+            progress_message,
+            stop_event,
+            progress_task,
+            f"Не удалось обработать фото: {exc}",
+        )
         await update_generation_status(session, generation.id, "failed", error=str(exc))
         await adjust_balances(session, user.id, diamonds_delta=cost_diamonds, bananas_delta=cost_bananas)
         await message.answer(f"❌ Не удалось создать изображение. Причина: {exc}")

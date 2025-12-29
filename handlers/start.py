@@ -17,10 +17,6 @@ async def cmd_start(message: types.Message, state: FSMContext, session: AsyncSes
     await state.finish()
 
     await send_main_menu(message, user)
-    await message.answer(
-        "✋ Стой, стой! Сначала небольшая, но важная инструкция 👉 Изучи её.\n\n"
-        "Если уже читал, то просто 📎 отправь фото в бота, как обычное сообщение."
-    )
 
 
 def register(dp):

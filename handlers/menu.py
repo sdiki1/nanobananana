@@ -14,53 +14,55 @@ from utils.helpers import format_profile, make_ref_link
 async def show_model_select(query: types.CallbackQuery, session: AsyncSession) -> None:
     user = await get_user_by_tg_id(session, query.from_user.id)
     if not user:
-        await query.message.answer("Сначала отправьте /start")
+        await query.message.edit_text("Сначала отправьте /start")
         return
-    await query.message.answer("Выберите модель:", reply_markup=model_select_kb(user.selected_model))
+    await query.message.edit_text("Выберите модель:", reply_markup=model_select_kb(user.selected_model))
 
 
 async def show_presets(query: types.CallbackQuery, session: AsyncSession) -> None:
     user = await get_user_by_tg_id(session, query.from_user.id)
     if not user:
-        await query.message.answer("Сначала отправьте /start")
+        await query.message.edit_text("Сначала отправьте /start")
         return
-    await query.message.answer("Выберите пресет:", reply_markup=presets_kb(user.selected_preset))
+    await query.message.edit_text("Выберите пресет:", reply_markup=presets_kb(user.selected_preset))
 
 
 async def show_topup(query: types.CallbackQuery) -> None:
-    await query.message.answer("Выберите способ оплаты:", reply_markup=topup_method_kb())
+    await query.message.edit_text("Выберите способ оплаты:", reply_markup=topup_method_kb())
 
 
 async def show_support(query: types.CallbackQuery) -> None:
-    await query.message.answer(
+    await query.message.edit_text(
         "Свяжитесь с поддержкой:",
         reply_markup=link_inline_kb("🧑‍💻 Поддержка", settings.support_url),
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
     )
 
 
 async def show_profile(query: types.CallbackQuery, session: AsyncSession) -> None:
     user = await get_user_by_tg_id(session, query.from_user.id)
     if not user:
-        await query.message.answer("Сначала отправьте /start")
+        await query.message.edit_text("Сначала отправьте /start")
         return
 
     referrals_count = await get_referrals_count(session, user.id)
     available_tokens = user.diamonds + user.bananas
     text = format_profile(user, referrals_count, available_tokens)
-    await query.message.answer(text, reply_markup=profile_menu_kb())
+    await query.message.edit_text(text, reply_markup=profile_menu_kb())
 
 
 async def show_referral(query: types.CallbackQuery, session: AsyncSession) -> None:
     user = await get_user_by_tg_id(session, query.from_user.id)
     if not user:
-        await query.message.answer("Сначала отправьте /start")
+        await query.message.edit_text("Сначала отправьте /start")
         return
     bot_username = settings.bot_username
     if not bot_username:
         me = await query.bot.get_me()
         bot_username = me.username
     ref_link = make_ref_link(bot_username, user.referral_code)
-    await query.message.answer(
+    await query.message.edit_text(
         "🧑‍🤝‍🧑 Реферальная программа\n\n"
         f"Ваша ссылка: <a href=\"{ref_link}\">{ref_link}</a>\n"
         f"Процент вознаграждения: {settings.referral_percent}%",
@@ -72,9 +74,9 @@ async def show_referral(query: types.CallbackQuery, session: AsyncSession) -> No
 async def back_to_main(query: types.CallbackQuery, session: AsyncSession) -> None:
     user = await get_user_by_tg_id(session, query.from_user.id)
     if not user:
-        await query.message.answer("Сначала отправьте /start")
+        await query.message.edit_text("Сначала отправьте /start")
         return
-    await send_main_menu(query.message, user)
+    await send_main_menu(query.message, user, edit=True)
 
 
 async def menu_callback(query: types.CallbackQuery, session: AsyncSession, state: FSMContext) -> None:

@@ -3,6 +3,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters import Text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from handlers.common import send_main_menu
 from db.repositories import get_user_by_tg_id, set_user_preset
 from keyboards.main import presets_kb
 from utils.presets import get_preset
@@ -17,7 +18,7 @@ async def preset_callback(query: types.CallbackQuery, state: FSMContext, session
         return
 
     if data == "back":
-        await query.message.delete()
+        await send_main_menu(query.message, user, edit=True)
         await query.answer()
         return
 
