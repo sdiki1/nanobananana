@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from aiogram.dispatcher.middlewares import BaseMiddleware
 
